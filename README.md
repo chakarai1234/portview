@@ -59,9 +59,8 @@ Every release also ships a `SHA256SUMS` file; verify the download with
 
 ### macOS (from a GitHub release)
 
-Same steps as Linux, with the macOS target — `aarch64-apple-darwin` for Apple
-Silicon or `x86_64-apple-darwin` for Intel — and `shasum -a 256 -c` for the
-checksum.
+Same steps as Linux, with the macOS target `aarch64-apple-darwin` (Apple
+Silicon) and `shasum -a 256 -c` for the checksum.
 
 ### Build from source
 

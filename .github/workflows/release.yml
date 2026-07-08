@@ -4,14 +4,17 @@ name: Release
 #
 # Triggers:
 #   * pushing a version tag (v0.1.0, v1.2.3, …)  → release named after the tag
-#   * manual "Run workflow" (workflow_dispatch)   → release named after the
+#   * pushing to main                             → release named after the
 #     version in Cargo.toml, tag created automatically if missing
+#   * manual "Run workflow" (workflow_dispatch)   → same as pushing to main
 #
 # A GitHub Release is ALWAYS created (or updated if it already exists), with
 # one .tar.gz per target plus a SHA256SUMS file.
 
 on:
   push:
+    branches:
+      - main
     tags:
       - "v*"
   workflow_dispatch:
@@ -58,8 +61,6 @@ jobs:
             os: ubuntu-22.04 # oldest LTS runner → widest glibc compatibility
           - target: aarch64-unknown-linux-gnu
             os: ubuntu-22.04-arm
-          - target: x86_64-apple-darwin
-            os: macos-13 # last Intel macOS runner
           - target: aarch64-apple-darwin
             os: macos-latest # Apple Silicon
 
