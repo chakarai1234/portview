@@ -1,0 +1,137 @@
+name: Release
+
+# Build portview for macOS and Linux and publish a GitHub Release.
+#
+# Triggers:
+#   * pushing a version tag (v0.1.0, v1.2.3, …)  → release named after the tag
+#   * manual "Run workflow" (workflow_dispatch)   → release named after the
+#     version in Cargo.toml, tag created automatically if missing
+#
+# A GitHub Release is ALWAYS created (or updated if it already exists), with
+# one .tar.gz per target plus a SHA256SUMS file.
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write # required to create tags and releases
+
+env:
+  BIN_NAME: portview
+
+jobs:
+  # ── Resolve the version/tag once, shared by every build job ───────────────
+  meta:
+    name: Resolve version
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.ver.outputs.tag }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Determine release tag
+        id: ver
+        run: |
+          if [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            tag="${GITHUB_REF#refs/tags/}"
+          else
+            # Manual run: derive the tag from Cargo.toml's package version.
+            version="$(grep -m1 '^version' Cargo.toml | cut -d '"' -f2)"
+            tag="v${version}"
+          fi
+          echo "tag=${tag}" >> "$GITHUB_OUTPUT"
+          echo "Release tag: ${tag}"
+
+  # ── Build one artifact per OS/arch ─────────────────────────────────────────
+  build:
+    name: Build ${{ matrix.target }}
+    needs: meta
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04 # oldest LTS runner → widest glibc compatibility
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04-arm
+          - target: x86_64-apple-darwin
+            os: macos-13 # last Intel macOS runner
+          - target: aarch64-apple-darwin
+            os: macos-latest # Apple Silicon
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Cache cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Run tests
+        run: cargo test --target ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --locked --target ${{ matrix.target }}
+
+      - name: Package tarball
+        run: |
+          tag="${{ needs.meta.outputs.tag }}"
+          pkg="${BIN_NAME}-${tag}-${{ matrix.target }}"
+          mkdir -p "dist/${pkg}"
+          cp "target/${{ matrix.target }}/release/${BIN_NAME}" "dist/${pkg}/"
+          cp README.md "dist/${pkg}/"
+          tar -czf "dist/${pkg}.tar.gz" -C dist "${pkg}"
+          # Per-file checksum (shasum on macOS, sha256sum on Linux)
+          cd dist
+          if command -v sha256sum >/dev/null; then
+            sha256sum "${pkg}.tar.gz" > "${pkg}.tar.gz.sha256"
+          else
+            shasum -a 256 "${pkg}.tar.gz" > "${pkg}.tar.gz.sha256"
+          fi
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.BIN_NAME }}-${{ matrix.target }}
+          path: |
+            dist/*.tar.gz
+            dist/*.sha256
+          if-no-files-found: error
+
+  # ── Publish everything as one GitHub Release ───────────────────────────────
+  release:
+    name: Publish GitHub Release
+    needs: [meta, build]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Combine checksums
+        run: |
+          cd dist
+          cat *.sha256 > SHA256SUMS
+          rm -f *.sha256
+          ls -l
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: ${{ env.BIN_NAME }} ${{ needs.meta.outputs.tag }}
+          generate_release_notes: true
+          files: |
+            dist/*.tar.gz
+            dist/SHA256SUMS

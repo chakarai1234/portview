@@ -1,0 +1,36 @@
+[package]
+name = "portview"
+version = "0.1.0"
+edition = "2021"
+description = "Verbose cross-platform (macOS + Linux) TCP/UDP port and process viewer with kill support"
+authors = ["chakarapani.srini@hcltech.com"]
+license = "MIT"
+readme = "README.md"
+
+[[bin]]
+name = "portview"
+path = "src/main.rs"
+
+[dependencies]
+# Socket enumeration — gives local/remote addr, port, TCP state, associated PIDs (macOS + Linux)
+netstat2 = "0.11.2"
+# Process forensics — name, exe path, cmdline, user, ppid, uptime, status
+sysinfo = "0.39.3"
+# Live TUI dashboard
+ratatui = "0.30.1"
+# Terminal backend — version matches ratatui 0.30's default crossterm feature.
+# We always import it via `ratatui::crossterm::*` so versions can never desync.
+crossterm = "0.29.0"
+# CLI parsing
+clap = { version = "4.6.1", features = ["derive"] }
+# Precise SIGTERM/SIGKILL with real errno on failure, plus geteuid for the
+# privilege hint (Unix only — macOS + Linux)
+nix = { version = "0.31.3", features = ["signal", "user"] }
+# JSON output
+serde = { version = "1.0.228", features = ["derive"] }
+serde_json = "1.0.150"
+
+[profile.release]
+opt-level = 3
+lto = "thin"
+strip = true

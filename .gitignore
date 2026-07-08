@@ -1,0 +1,14 @@
+# Rust build artifacts
+/target
+**/*.rs.bk
+Cargo.lock
+
+# Red Queen code-map (generated, never committed)
+code_summary.md
+.code_graph/
+
+# OS / editor cruft
+.DS_Store
+*.swp
+.idea/
+.vscode/
